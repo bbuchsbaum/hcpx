@@ -45,6 +45,9 @@ hcpx_auth <- function(h, aws_profile = NULL, keyring_service = "hcpx",
     Sys.setenv(AWS_PROFILE = aws_profile)
     cli::cli_alert_success("Using AWS profile: {.val {aws_profile}}")
     h$auth <- list(method = "aws_profile", profile = aws_profile)
+    if (inherits(h$backend, "hcpx_backend_aws")) {
+      h$backend$profile <- aws_profile
+    }
     return(invisible(h))
   }
 
@@ -106,7 +109,8 @@ if (interactive) {
   # No credentials found
   cli::cli_warn(c(
     "No AWS credentials configured",
-    "i" = "The HCP open-access bucket doesn't require credentials for downloads",
+    "i" = "The HCP open-access S3 bucket is requester-pays and typically requires AWS credentials",
+    "i" = "For metadata-only exploration, use {.code catalog_version = 'seed'} or a local mirror",
     "i" = "For private buckets, use {.code hcpx_auth(h, aws_profile = 'myprofile')}"
   ))
 

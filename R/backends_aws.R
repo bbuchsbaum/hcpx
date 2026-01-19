@@ -12,16 +12,22 @@
 #' @param bucket S3 bucket name (default: "hcp-openaccess")
 #' @param region AWS region (default: "us-east-1")
 #' @param profile AWS profile name for private buckets (optional)
+#' @param request_payer Request payer mode for requester-pays buckets. Use
+#'   "requester" to send the request-payer flag/header (default: "requester"
+#'   for the HCP open-access bucket).
 #' @return hcpx_backend_aws object
 #' @keywords internal
-hcpx_backend_aws <- function(bucket = "hcp-openaccess", region = "us-east-1", profile = NULL) {
+hcpx_backend_aws <- function(bucket = "hcp-openaccess",
+                             region = "us-east-1",
+                             profile = NULL,
+                             request_payer = if (identical(bucket, "hcp-openaccess")) "requester" else NULL) {
   structure(
     list(
       type = "aws",
       bucket = bucket,
       region = region,
       profile = profile,
-      # Base URL for public S3 access
+      request_payer = request_payer,
       base_url = sprintf("https://%s.s3.amazonaws.com", bucket)
     ),
     class = c("hcpx_backend_aws", "hcpx_backend")
@@ -42,21 +48,129 @@ s3_url <- function(backend, remote_path) {
   paste0(backend$base_url, "/", encoded_path)
 }
 
+.aws_cli_path <- function() {
+  override <- Sys.getenv("HCPX_AWS_CLI", unset = "")
+  if (nzchar(override)) return(override)
+  Sys.which("aws")
+}
+
+.aws_cli_global_args <- function(backend) {
+  args <- c("--no-cli-pager")
+
+  if (!is.null(backend$region) && nzchar(backend$region)) {
+    args <- c(args, "--region", backend$region)
+  }
+
+  if (!is.null(backend$profile) && nzchar(backend$profile)) {
+    args <- c(args, "--profile", backend$profile)
+  }
+
+  args
+}
+
+.aws_request_payer_args <- function(backend) {
+  if (!is.null(backend$request_payer) && nzchar(backend$request_payer)) {
+    return(c("--request-payer", backend$request_payer))
+  }
+  character()
+}
+
+.aws_run <- function(backend, args) {
+  aws <- .aws_cli_path()
+  if (!nzchar(aws)) {
+    cli::cli_abort(c(
+      "AWS CLI not found",
+      "i" = "Install AWS CLI and ensure {.code aws} is on PATH, or set {.envvar HCPX_AWS_CLI}."
+    ))
+  }
+
+  stdout_file <- tempfile("hcpx_aws_stdout_")
+  stderr_file <- tempfile("hcpx_aws_stderr_")
+  on.exit(unlink(c(stdout_file, stderr_file)), add = TRUE)
+
+  status <- tryCatch(
+    system2(aws, args = args, stdout = stdout_file, stderr = stderr_file),
+    error = function(e) 127L
+  )
+
+  stdout <- paste(readLines(stdout_file, warn = FALSE), collapse = "\n")
+  stderr <- paste(readLines(stderr_file, warn = FALSE), collapse = "\n")
+
+  list(status = status, stdout = stdout, stderr = stderr)
+}
+
+.aws_s3api_json <- function(backend, op_args) {
+  args <- c(
+    .aws_cli_global_args(backend),
+    "s3api",
+    op_args,
+    "--output",
+    "json"
+  )
+
+  res <- .aws_run(backend, args)
+  if (!identical(res$status, 0L)) {
+    cli::cli_abort(c(
+      "AWS CLI failed",
+      "x" = "{res$stderr}"
+    ))
+  }
+
+  jsonlite::fromJSON(res$stdout)
+}
+
 #' List files via AWS backend
 #'
 #' @rdname backend_list
 #' @export
 #' @method backend_list hcpx_backend_aws
 backend_list.hcpx_backend_aws <- function(backend, prefix, ...) {
-  # S3 list objects via REST API
-  # For public buckets, we can use the list-type=2 API
   prefix <- sub("^/", "", prefix)
 
-  list_url <- sprintf("%s?list-type=2&prefix=%s",
-                      backend$base_url,
-                      utils::URLencode(prefix, reserved = TRUE))
+  # Prefer AWS CLI for requester-pays or non-public buckets.
+  aws <- .aws_cli_path()
+  if (nzchar(aws)) {
+    out <- .aws_s3api_json(
+      backend,
+      c(
+        "list-objects-v2",
+        "--bucket",
+        backend$bucket,
+        "--prefix",
+        prefix,
+        .aws_request_payer_args(backend)
+      )
+    )
 
-  # Fetch XML response
+    if (is.null(out$Contents) || length(out$Contents) == 0) {
+      return(tibble::tibble(
+        remote_path = character(),
+        size_bytes = integer(),
+        last_modified = character()
+      ))
+    }
+
+    return(tibble::tibble(
+      remote_path = out$Contents$Key,
+      size_bytes = as.integer(out$Contents$Size),
+      last_modified = as.character(out$Contents$LastModified)
+    ))
+  }
+
+  if (!is.null(backend$request_payer) && nzchar(backend$request_payer)) {
+    cli::cli_abort(c(
+      "AWS CLI required for requester-pays buckets",
+      "i" = "Install AWS CLI and configure credentials (or use {.code hcpx_auth()}).",
+      "i" = "Bucket: {.val {backend$bucket}}"
+    ))
+  }
+
+  # Fallback: S3 list objects via unsigned REST API (works only for public buckets)
+  list_url <- sprintf("%s?list-type=2&prefix=%s",
+    backend$base_url,
+    utils::URLencode(prefix, reserved = TRUE)
+  )
+
   response <- tryCatch({
     curl_h <- curl::new_handle()
     curl::handle_setopt(curl_h, followlocation = TRUE)
@@ -69,14 +183,16 @@ backend_list.hcpx_backend_aws <- function(backend, prefix, ...) {
     cli::cli_abort("S3 list failed with status {response$status_code}")
   }
 
-  # Parse XML response
   xml_content <- rawToChar(response$content)
 
-  # Extract keys and sizes using regex (avoiding XML dependency)
-  keys <- unlist(regmatches(xml_content,
-    gregexpr("(?<=<Key>)[^<]+(?=</Key>)", xml_content, perl = TRUE)))
-  sizes <- unlist(regmatches(xml_content,
-    gregexpr("(?<=<Size>)[^<]+(?=</Size>)", xml_content, perl = TRUE)))
+  keys <- unlist(regmatches(
+    xml_content,
+    gregexpr("(?<=<Key>)[^<]+(?=</Key>)", xml_content, perl = TRUE)
+  ))
+  sizes <- unlist(regmatches(
+    xml_content,
+    gregexpr("(?<=<Size>)[^<]+(?=</Size>)", xml_content, perl = TRUE)
+  ))
 
   if (length(keys) == 0) {
     return(tibble::tibble(
@@ -99,9 +215,54 @@ backend_list.hcpx_backend_aws <- function(backend, prefix, ...) {
 #' @export
 #' @method backend_head hcpx_backend_aws
 backend_head.hcpx_backend_aws <- function(backend, remote_path, ...) {
+  remote_path <- sub("^/", "", remote_path)
+
+  aws <- .aws_cli_path()
+  if (nzchar(aws)) {
+    res <- .aws_run(
+      backend,
+      c(
+        .aws_cli_global_args(backend),
+        "s3api",
+        "head-object",
+        "--bucket",
+        backend$bucket,
+        "--key",
+        remote_path,
+        .aws_request_payer_args(backend),
+        "--output",
+        "json"
+      )
+    )
+
+    if (!identical(res$status, 0L)) {
+      if (grepl("\\(404\\)", res$stderr, fixed = FALSE) || grepl("Not Found", res$stderr, fixed = TRUE)) {
+        cli::cli_abort("File not found: {remote_path}")
+      }
+      cli::cli_abort(c(
+        "HEAD request failed via AWS CLI",
+        "x" = "{res$stderr}"
+      ))
+    }
+
+    out <- jsonlite::fromJSON(res$stdout)
+    return(tibble::tibble(
+      size_bytes = as.integer(out$ContentLength %||% NA),
+      etag = out$ETag %||% NA_character_,
+      last_modified = as.character(out$LastModified %||% NA_character_)
+    ))
+  }
+
+  if (!is.null(backend$request_payer) && nzchar(backend$request_payer)) {
+    cli::cli_abort(c(
+      "AWS CLI required for requester-pays buckets",
+      "i" = "Install AWS CLI and configure credentials (or use {.code hcpx_auth()}).",
+      "i" = "Bucket: {.val {backend$bucket}}"
+    ))
+  }
+
   url <- s3_url(backend, remote_path)
 
-  # Use curl to make HEAD request
   curl_h <- curl::new_handle()
   curl::handle_setopt(curl_h,
     nobody = TRUE,
@@ -122,7 +283,6 @@ backend_head.hcpx_backend_aws <- function(backend, remote_path, ...) {
     cli::cli_abort("HEAD request failed with status {response$status_code}")
   }
 
-  # Parse headers
   headers <- curl::parse_headers_list(response$headers)
 
   tibble::tibble(
@@ -138,8 +298,30 @@ backend_head.hcpx_backend_aws <- function(backend, remote_path, ...) {
 #' @export
 #' @method backend_presign hcpx_backend_aws
 backend_presign.hcpx_backend_aws <- function(backend, remote_path, expires_sec = .DEFAULT_PRESIGN_EXPIRY_SEC) {
-  # For public buckets like hcp-openaccess, we just return the direct URL
-  # No actual presigning needed since the bucket is publicly accessible
+  remote_path <- sub("^/", "", remote_path)
+  aws <- .aws_cli_path()
+
+  if (nzchar(aws)) {
+    s3_uri <- sprintf("s3://%s/%s", backend$bucket, remote_path)
+    res <- .aws_run(
+      backend,
+      c(
+        .aws_cli_global_args(backend),
+        "s3",
+        "presign",
+        s3_uri,
+        "--expires-in",
+        as.integer(expires_sec)
+      )
+    )
+
+    url <- trimws(res$stdout)
+    if (identical(res$status, 0L) && nzchar(url)) {
+      return(url)
+    }
+  }
+
+  # Fallback: direct HTTPS URL (works only for public buckets)
   s3_url(backend, remote_path)
 }
 
@@ -149,45 +331,135 @@ backend_presign.hcpx_backend_aws <- function(backend, remote_path, expires_sec =
 #' @export
 #' @method backend_download hcpx_backend_aws
 backend_download.hcpx_backend_aws <- function(backend, url_or_path, dest, resume = TRUE, ...) {
-  # Determine if we got a URL or a path
-  if (grepl("^https?://", url_or_path)) {
-    url <- url_or_path
-  } else {
-    url <- s3_url(backend, url_or_path)
+  # Allow direct download of URLs (e.g., pre-signed links)
+  if (grepl("^https?://", url_or_path, ignore.case = TRUE)) {
+    ok <- download_url(url_or_path, dest, resume = resume)
+    if (!isTRUE(ok) || !file.exists(dest)) {
+      cli::cli_abort("Download failed for URL: {url_or_path}")
+    }
+    return(tibble::tibble(
+      status = "success",
+      bytes = as.integer(file.info(dest)$size)
+    ))
   }
 
-  # Set up curl handle
-  curl_h <- curl::new_handle()
-  curl::handle_setopt(curl_h,
-    followlocation = TRUE,
-    failonerror = TRUE
-  )
+  remote_path <- sub("^/", "", url_or_path)
 
-  # Resume support
-  existing_size <- 0L
+  dest_dir <- dirname(dest)
+  if (!dir.exists(dest_dir)) dir.create(dest_dir, recursive = TRUE)
+
+  aws <- .aws_cli_path()
+  if (!nzchar(aws)) {
+    if (!is.null(backend$request_payer) && nzchar(backend$request_payer)) {
+      cli::cli_abort(c(
+        "AWS CLI required for requester-pays buckets",
+        "i" = "Install AWS CLI and configure credentials (or use {.code hcpx_auth()}).",
+        "i" = "Bucket: {.val {backend$bucket}}"
+      ))
+    }
+    # Fallback: unsigned HTTPS for public buckets
+    ok <- download_url(s3_url(backend, remote_path), dest, resume = resume)
+    if (!isTRUE(ok) || !file.exists(dest)) {
+      cli::cli_abort("Download failed for path: {remote_path}")
+    }
+    return(tibble::tibble(
+      status = "success",
+      bytes = as.integer(file.info(dest)$size)
+    ))
+  }
+
+  meta <- NULL
   if (resume && file.exists(dest)) {
-    existing_size <- file.info(dest)$size
-    if (!is.na(existing_size) && existing_size > 0) {
-      curl::handle_setopt(curl_h, resume_from = existing_size)
+    meta <- tryCatch(backend_head(backend, remote_path), error = function(e) NULL)
+    if (!is.null(meta) && nrow(meta) > 0) {
+      remote_size <- meta$size_bytes[[1]]
+      local_size <- file.info(dest)$size
+      if (!is.na(remote_size) && !is.na(local_size) && local_size == remote_size) {
+        return(tibble::tibble(status = "success", bytes = as.integer(local_size)))
+      }
     }
   }
 
-  # Download
-  tryCatch({
-    curl::curl_download(url, dest, handle = curl_h, mode = "wb")
-  }, error = function(e) {
-    # Check if it's a "file already complete" situation
-    if (grepl("416", e$message) && existing_size > 0) {
-      # File is already complete
-      return(invisible(NULL))
-    }
-    cli::cli_abort("Download failed: {e$message}")
-  })
-  # Get final file size
-  final_size <- file.info(dest)$size
+  # Support partial resume via range requests when we can determine the remote size.
+  if (resume && file.exists(dest) && !is.null(meta) && nrow(meta) > 0) {
+    remote_size <- meta$size_bytes[[1]]
+    local_size <- file.info(dest)$size
+    if (!is.na(remote_size) && !is.na(local_size) && local_size > 0 && local_size < remote_size) {
+      tmp <- tempfile(pattern = paste0(basename(dest), "_part_"), tmpdir = dest_dir)
+      on.exit(unlink(tmp), add = TRUE)
 
-  tibble::tibble(
-    status = "success",
-    bytes = as.integer(final_size)
+      res <- .aws_run(
+        backend,
+        c(
+          .aws_cli_global_args(backend),
+          "s3api",
+          "get-object",
+          "--bucket",
+          backend$bucket,
+          "--key",
+          remote_path,
+          .aws_request_payer_args(backend),
+          "--range",
+          sprintf("bytes=%d-", as.integer(local_size)),
+          tmp
+        )
+      )
+
+      if (!identical(res$status, 0L)) {
+        cli::cli_abort(c(
+          "Download resume failed via AWS CLI",
+          "x" = "{res$stderr}"
+        ))
+      }
+
+      ok <- file.append(dest, tmp)
+      if (!isTRUE(ok)) {
+        cli::cli_abort("Failed to append resumed download chunk to destination file")
+      }
+
+      final_size <- file.info(dest)$size
+      if (!is.na(final_size) && !is.na(remote_size) && final_size != remote_size) {
+        cli::cli_abort(c(
+          "Resumed download size mismatch",
+          "i" = "Expected {remote_size} bytes, got {final_size} bytes"
+        ))
+      }
+
+      return(tibble::tibble(status = "success", bytes = as.integer(final_size)))
+    }
+  }
+
+  # Full download to temp file then move into place.
+  tmp <- tempfile(pattern = paste0(basename(dest), "_"), tmpdir = dest_dir)
+  on.exit(unlink(tmp), add = TRUE)
+
+  res <- .aws_run(
+    backend,
+    c(
+      .aws_cli_global_args(backend),
+      "s3api",
+      "get-object",
+      "--bucket",
+      backend$bucket,
+      "--key",
+      remote_path,
+      .aws_request_payer_args(backend),
+      tmp
+    )
   )
+
+  if (!identical(res$status, 0L)) {
+    cli::cli_abort(c(
+      "Download failed via AWS CLI",
+      "x" = "{res$stderr}"
+    ))
+  }
+
+  if (file.exists(dest)) unlink(dest)
+  ok <- file.rename(tmp, dest)
+  if (!isTRUE(ok)) {
+    file.copy(tmp, dest, overwrite = TRUE)
+  }
+
+  tibble::tibble(status = "success", bytes = as.integer(file.info(dest)$size))
 }

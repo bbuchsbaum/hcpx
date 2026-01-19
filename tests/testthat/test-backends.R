@@ -10,6 +10,7 @@ test_that("hcpx_backend_aws creates valid object", {
   expect_equal(backend$type, "aws")
   expect_equal(backend$bucket, "hcp-openaccess")
   expect_equal(backend$region, "us-east-1")
+  expect_equal(backend$request_payer, "requester")
 })
 
 test_that("hcpx_backend_aws accepts custom bucket and region", {
@@ -17,9 +18,10 @@ test_that("hcpx_backend_aws accepts custom bucket and region", {
 
   expect_equal(backend$bucket, "my-bucket")
   expect_equal(backend$region, "eu-west-1")
+  expect_null(backend$request_payer)
 })
 
-test_that("backend_presign.hcpx_backend_aws returns public URL for hcp-openaccess", {
+test_that("backend_presign.hcpx_backend_aws returns HTTPS URL", {
   backend <- hcpx_backend_aws()
 
   url <- backend_presign(backend, "HCP_1200/100206/file.nii")
@@ -27,6 +29,17 @@ test_that("backend_presign.hcpx_backend_aws returns public URL for hcp-openacces
   expect_true(grepl("^https://", url))
   expect_true(grepl("hcp-openaccess", url))
   expect_true(grepl("100206", url))
+})
+
+test_that("aws backend errors clearly when aws CLI is missing", {
+  withr::local_envvar(PATH = "")
+  backend <- hcpx_backend_aws()
+
+  dest <- file.path(withr::local_tempdir(), "aws-missing.bin")
+  expect_error(
+    backend_download(backend, "HCP_1200/100206/file.nii", dest),
+    "AWS CLI required for requester-pays buckets"
+  )
 })
 
 # --- Local Backend Tests ---

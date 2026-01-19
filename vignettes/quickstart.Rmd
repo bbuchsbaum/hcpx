@@ -409,6 +409,9 @@ derived(h, recipe = "parcellate_schaefer400")
 
 ### AWS (S3 Open-Access Bucket)
 
+> **Note**: The HCP S3 bucket is requester-pays. You’ll typically need AWS
+> credentials configured to download files, and downloads may incur AWS charges.
+
 ```{r}
 # Use an AWS profile
 hcpx_auth(h, aws_profile = "hcp")

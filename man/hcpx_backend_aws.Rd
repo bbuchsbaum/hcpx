@@ -7,7 +7,8 @@
 hcpx_backend_aws(
   bucket = "hcp-openaccess",
   region = "us-east-1",
-  profile = NULL
+  profile = NULL,
+  request_payer = if (identical(bucket, "hcp-openaccess")) "requester" else NULL
 )
 }
 \arguments{
@@ -16,6 +17,10 @@ hcpx_backend_aws(
 \item{region}{AWS region (default: "us-east-1")}
 
 \item{profile}{AWS profile name for private buckets (optional)}
+
+\item{request_payer}{Request payer mode for requester-pays buckets. Use
+"requester" to send the request-payer flag/header (default: "requester"
+for the HCP open-access bucket).}
 }
 \value{
 hcpx_backend_aws object

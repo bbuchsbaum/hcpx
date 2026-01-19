@@ -174,8 +174,7 @@ download_single <- function(h, remote_path, local_path, resume = TRUE) {
 
   # For AWS backend, get presigned URL and download
   if (inherits(backend, "hcpx_backend_aws")) {
-    url <- backend_presign(backend, remote_path)
-    download_url(url, local_path, resume = resume)
+    backend_download(backend, remote_path, local_path, resume = resume)
     return(TRUE)
   }
 
