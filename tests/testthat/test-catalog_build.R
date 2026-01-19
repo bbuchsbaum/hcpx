@@ -236,19 +236,50 @@ test_that("ingest_behavioral_csv errors without Subject column", {
 
 # --- scan_s3_for_subjects tests ---
 
-test_that("scan_s3_for_subjects warns for non-AWS backend", {
+test_that("scan_s3_for_subjects warns for BALSA backend", {
   skip_if_not(has_duckdb() || has_sqlite(), "No database backend available")
 
   tmp_dir <- withr::local_tempdir()
-  h <- hcpx_ya(cache = tmp_dir, backend = "local", local_root = tmp_dir)
+  h <- hcpx_ya(cache = tmp_dir, backend = "balsa", catalog_version = "none")
   on.exit(hcpx_close(h), add = TRUE)
 
   expect_warning(
     result <- hcpx:::scan_s3_for_subjects(h, "100206"),
-    "S3 scanning only available with AWS backend"
+    "not available for BALSA/Aspera backend"
   )
 
   expect_equal(result, 0)
+})
+
+test_that("scan_s3_for_subjects can scan local backend mirrors", {
+  skip_if_not(has_duckdb() || has_sqlite(), "No database backend available")
+
+  tmp_dir <- withr::local_tempdir()
+  local_root <- file.path(tmp_dir, "mirror")
+  dir.create(local_root, recursive = TRUE)
+
+  # Create a minimal file layout that matches the demo remote_path style.
+  rel_path <- file.path("HCP_1200", "100206", "MNINonLinear", "Results",
+    "tfMRI_WM_LR", "EVs", "0bk_body.txt"
+  )
+  full_path <- file.path(local_root, rel_path)
+  dir.create(dirname(full_path), recursive = TRUE)
+  writeLines("hello", full_path)
+
+  h <- hcpx_ya(cache = tmp_dir, backend = "local", local_root = local_root, catalog_version = "none")
+  on.exit(hcpx_close(h), add = TRUE)
+  schema_init(get_con(h))
+
+  n_added <- hcpx:::scan_s3_for_subjects(h, "100206")
+  expect_gt(n_added, 0)
+
+  con <- get_con(h)
+  assets <- DBI::dbGetQuery(con, "SELECT remote_path, subject_id FROM assets WHERE subject_id = '100206'")
+  expect_true(any(grepl("0bk_body\\.txt$", assets$remote_path)))
+
+  subjects <- DBI::dbGetQuery(con, "SELECT subject_id, release FROM subjects WHERE subject_id = '100206'")
+  expect_equal(nrow(subjects), 1)
+  expect_equal(subjects$release[[1]], h$release)
 })
 
 # --- add_assets_from_paths tests ---

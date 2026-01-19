@@ -23,8 +23,9 @@ at minimum: Subject, Gender, Age columns.}
 \item{behavioral_csv}{Path to HCP behavioral CSV (optional). Contains
 completion flags and basic subject info.}
 
-\item{scan_s3}{Scan S3 bucket to discover assets (default FALSE). Requires
-network access and can be slow for full catalog.}
+\item{scan_s3}{Scan the current backend to discover assets (default FALSE).
+Requires a backend that supports \code{\link[=backend_list]{backend_list()}} (e.g., AWS or local).
+Scanning can be slow for large datasets.}
 
 \item{subjects}{Character vector of subject IDs to include (optional).
 If NULL, includes all available subjects.}
@@ -40,7 +41,7 @@ Modified hcpx handle (invisibly)
 }
 \description{
 Builds the catalog from HCP metadata sources. Can use local CSV files or
-scan the S3 bucket directly. The catalog is stored in the local database
+scan a backend directly. The catalog is stored in the local database
 and persists across sessions.
 }
 \examples{

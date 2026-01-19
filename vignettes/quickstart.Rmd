@@ -446,13 +446,14 @@ h <- hcpx_ya(backend = "rest")
 3. **Plan first**: Always review a plan before downloading gigabytes of data
 4. **Pin important files**: Prevent accidental eviction of files you need
 5. **Export manifests**: Share reproducible file lists with collaborators
+6. **If using BALSA/Aspera**: Download+extract to a local mirror, then use `backend = "local"` and `catalog_build(..., scan_s3 = TRUE)` to index the mirror
 
 ### Data Analysis
-6. **Use `load_run()` for complete runs**: Gets dtseries, confounds, and EVs together
-7. **Concatenate with care**: Use `run_boundaries` for per-run normalization
-8. **Cache derived products**: Use `derive()` to avoid recomputing parcellations
-9. **Prefer parcellation**: Reduces data size and noise for connectivity analyses
-10. **Check coordinates**: MNI coordinates are automatically converted to voxel space
+7. **Use `load_run()` for complete runs**: Gets dtseries, confounds, and EVs together
+8. **Concatenate with care**: Use `run_boundaries` for per-run normalization
+9. **Cache derived products**: Use `derive()` to avoid recomputing parcellations
+10. **Prefer parcellation**: Reduces data size and noise for connectivity analyses
+11. **Check coordinates**: MNI coordinates are automatically converted to voxel space
 
 ## Next Steps
 

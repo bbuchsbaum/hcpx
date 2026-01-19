@@ -14,8 +14,9 @@
 #'   at minimum: Subject, Gender, Age columns.
 #' @param behavioral_csv Path to HCP behavioral CSV (optional). Contains
 #'   completion flags and basic subject info.
-#' @param scan_s3 Scan S3 bucket to discover assets (default FALSE). Requires
-#'   network access and can be slow for full catalog.
+#' @param scan_s3 Scan the current backend to discover assets (default FALSE).
+#'   Requires a backend that supports [backend_list()] (e.g., AWS or local).
+#'   Scanning can be slow for large datasets.
 #' @param subjects Character vector of subject IDs to include (optional).
 #'   If NULL, includes all available subjects.
 #' @param restricted_csv Optional restricted measures file. User must have
@@ -282,8 +283,15 @@ scan_s3_for_subjects <- function(h, subjects) {
   backend <- h$backend
   con <- get_con(h)
 
-  if (!inherits(backend, "hcpx_backend_aws")) {
-    cli::cli_warn("S3 scanning only available with AWS backend")
+  if (inherits(backend, "hcpx_backend_balsa")) {
+    cli::cli_warn("Asset scanning is not available for BALSA/Aspera backend")
+    return(0)
+  }
+
+  if (!inherits(backend, "hcpx_backend_aws") &&
+      !inherits(backend, "hcpx_backend_local") &&
+      !inherits(backend, "hcpx_backend_rest")) {
+    cli::cli_warn("Asset scanning is only available with backends that support backend_list()")
     return(0)
   }
 
@@ -292,11 +300,33 @@ scan_s3_for_subjects <- function(h, subjects) {
   cli::cli_progress_bar("Scanning subjects", total = length(subjects))
 
   for (subject_id in subjects) {
-    # Scan common prefixes for this subject
-    prefixes <- c(
-      sprintf("HCP_1200/%s/MNINonLinear/Results/", subject_id),
-      sprintf("HCP_1200/%s/T1w/", subject_id)
+    # Ensure subject exists (minimal record) even if user did not ingest a subjects CSV.
+    subj_exists <- DBI::dbGetQuery(con,
+      "SELECT 1 FROM subjects WHERE subject_id = ?",
+      params = list(subject_id)
     )
+    if (nrow(subj_exists) == 0) {
+      DBI::dbExecute(con,
+        "INSERT INTO subjects (subject_id, release) VALUES (?, ?)",
+        params = list(subject_id, h$release)
+      )
+    }
+
+    if (inherits(backend, "hcpx_backend_local")) {
+      # Local mirrors may be rooted either at a directory containing the release
+      # (e.g. <root>/HCP_1200/<subject>/...) or at the release directory itself
+      # (e.g. <root>/<subject>/...).
+      prefixes <- c(
+        sprintf("%s/%s/", h$release, subject_id),
+        sprintf("%s/", subject_id)
+      )
+    } else {
+      # For remote backends, scan common prefixes for this subject
+      prefixes <- c(
+        sprintf("%s/%s/MNINonLinear/Results/", h$release, subject_id),
+        sprintf("%s/%s/T1w/", h$release, subject_id)
+      )
+    }
 
     for (prefix in prefixes) {
       files <- tryCatch({
@@ -306,53 +336,13 @@ scan_s3_for_subjects <- function(h, subjects) {
       })
 
       if (nrow(files) > 0) {
-        # Parse and insert each file
-        for (j in seq_len(nrow(files))) {
-          remote_path <- files$remote_path[j]
-          size_bytes <- files$size_bytes[j]
-
-          # Parse path to extract metadata
-          parsed <- tryCatch({
-            parse_hcp_path(remote_path)
-          }, error = function(e) NULL)
-
-          if (!is.null(parsed)) {
-            # Generate asset_id
-            asset_id <- digest::digest(remote_path, algo = "md5", serialize = FALSE)
-            asset_id <- substr(asset_id, 1, .ASSET_ID_LENGTH)
-
-            # Check if already exists
-            exists <- DBI::dbGetQuery(con,
-              "SELECT 1 FROM assets WHERE remote_path = ?",
-              params = list(remote_path)
-            )
-
-            if (nrow(exists) == 0) {
-              DBI::dbExecute(con, "
-                INSERT INTO assets (asset_id, release, subject_id, session, kind,
-                  task, direction, run, space, derivative_level, file_type,
-                  remote_path, size_bytes, access_tier)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              ", params = list(
-                asset_id,
-                h$release,
-                subject_id,
-                parsed$session %||% "3T",
-                parsed$kind,
-                parsed$task,
-                parsed$direction,
-                parsed$run,
-                parsed$space,
-                parsed$derivative_level,
-                parsed$file_type,
-                remote_path,
-                size_bytes,
-                "open"
-              ))
-              total_added <- total_added + 1
-            }
-          }
-        }
+        files <- files[!duplicated(files$remote_path), , drop = FALSE]
+        total_added <- total_added + add_assets_from_paths(
+          h,
+          paths = files$remote_path,
+          subject_id = subject_id,
+          size_bytes = files$size_bytes
+        )
       }
     }
 
