@@ -4,6 +4,8 @@ Version: 0.0.1
 Authors@R:
     person("Bradley", "Buchsbaum", , "brad.buchsbaum@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0003-0955-6606"))
+Author: Bradley Buchsbaum [aut, cre] (0000-0003-0955-6606)
+Maintainer: Bradley Buchsbaum <brad.buchsbaum@gmail.com>
 Description: Turns HCP (Human Connectome Project) data into a local, queryable
     asset catalog with task/run awareness, plan-first downloads, reproducible
     manifests, and policy-aware metadata. Provides a table-first interface where
