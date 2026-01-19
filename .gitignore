@@ -1,8 +1,13 @@
 # R build/check artifacts
 ..Rcheck/
 *.Rcheck/
-.Rcheck/
 *.tar.gz
+.Rcheck/
+
+# RStudio / project files
+*.Rproj.user
+.Rproj.user/
+*.Rproj
 
 # R session/user files
 .Rhistory
@@ -10,12 +15,11 @@
 .Ruserdata
 .Renviron
 .Rprofile
-.Rproj.user/
-*.Rproj
 
 # OS/editor
 .DS_Store
 Thumbs.db
+*~
 
 # Local scratch
 .env
