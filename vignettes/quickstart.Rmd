@@ -423,11 +423,15 @@ hcpx_auth_status(h)
 
 ### ConnectomeDB (REST Backend)
 
+> **Note**: ConnectomeDB availability and endpoints may change over time. If REST
+> authentication does not work for your account/environment, consider using
+> `backend = "balsa"` with Aspera instead (see Option 4 above).
+
 ```{r}
 # Store ConnectomeDB credentials
 hcpx_connectome_auth("username", "password")
 
-# Use REST backend
+# Use REST backend (legacy)
 h <- hcpx_ya(backend = "rest")
 ```
 

@@ -1,17 +1,29 @@
 # REST/ConnectomeDB backend implementation
 #
-# ConnectomeDB uses XNAT platform with session-based authentication.
-# Users need an account at db.humanconnectome.org and appropriate data access.
+# NOTE: ConnectomeDB endpoints and access patterns may change over time.
+# If the REST API does not work for your account/environment, consider using
+# hcpx_backend_balsa() (Aspera) or another backend.
+#
+# This backend uses XNAT platform with session-based authentication.
+# Users need an account and appropriate data access permissions.
 # This backend handles cookie/session management and authenticated downloads.
 
 # Package-level session storage for REST backend
 .rest_session <- new.env(parent = emptyenv())
 
-#' Create REST backend
+#' Create REST backend (legacy)
+#'
+#' Creates a backend for accessing HCP data via ConnectomeDB REST API.
+#'
+#' @section Deprecation Notice:
+#' ConnectomeDB availability and endpoints may change over time. If the REST
+#' API does not work for your account/environment, consider using
+#' [hcpx_backend_balsa()] (Aspera) or another backend.
 #'
 #' @param base_url Base URL for ConnectomeDB/XNAT
 #' @param project XNAT project name (default: "HCP_1200")
 #' @return hcpx_backend_rest object
+#' @seealso [hcpx_backend_balsa()], [hcpx_backend_aws()]
 #' @keywords internal
 hcpx_backend_rest <- function(base_url = "https://db.humanconnectome.org",
                                project = "HCP_1200") {
@@ -26,9 +38,14 @@ hcpx_backend_rest <- function(base_url = "https://db.humanconnectome.org",
   )
 }
 
-#' Authenticate with ConnectomeDB
+#' Authenticate with ConnectomeDB (legacy)
 #'
 #' Creates a session with ConnectomeDB using stored credentials.
+#'
+#' @section Deprecation Notice:
+#' ConnectomeDB availability and endpoints may change over time. Consider using
+#' [hcpx_backend_balsa()] (Aspera) or another backend if REST authentication
+#' fails.
 #'
 #' @param backend REST backend object
 #' @param username ConnectomeDB username (optional, uses keyring if not provided)
@@ -325,13 +342,19 @@ backend_download.hcpx_backend_rest <- function(backend, url_or_path, dest, resum
   )
 }
 
-#' Store ConnectomeDB credentials in keyring
+#' Store ConnectomeDB credentials in keyring (legacy)
 #'
 #' Securely stores ConnectomeDB credentials for later use with the REST backend.
+#'
+#' @section Deprecation Notice:
+#' ConnectomeDB availability and endpoints may change over time. If REST access
+#' does not work for your account/environment, consider using
+#' `backend = "balsa"` (Aspera) or another backend.
 #'
 #' @param username ConnectomeDB username
 #' @param password ConnectomeDB password
 #' @return Invisible TRUE
+#' @seealso [hcpx_backend_balsa()], [hcpx_connectome_clear()]
 #' @export
 #' @examples
 #' \dontrun{

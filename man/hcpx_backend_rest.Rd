@@ -2,7 +2,7 @@
 % Please edit documentation in R/backends_rest.R
 \name{hcpx_backend_rest}
 \alias{hcpx_backend_rest}
-\title{Create REST backend}
+\title{Create REST backend (legacy)}
 \usage{
 hcpx_backend_rest(
   base_url = "https://db.humanconnectome.org",
@@ -18,6 +18,16 @@ hcpx_backend_rest(
 hcpx_backend_rest object
 }
 \description{
-Create REST backend
+Creates a backend for accessing HCP data via ConnectomeDB REST API.
+}
+\section{Deprecation Notice}{
+
+ConnectomeDB availability and endpoints may change over time. If the REST
+API does not work for your account/environment, consider using
+\code{\link[=hcpx_backend_balsa]{hcpx_backend_balsa()}} (Aspera) or another backend.
+}
+
+\seealso{
+\code{\link[=hcpx_backend_balsa]{hcpx_backend_balsa()}}, \code{\link[=hcpx_backend_aws]{hcpx_backend_aws()}}
 }
 \keyword{internal}

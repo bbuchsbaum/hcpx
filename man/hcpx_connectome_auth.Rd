@@ -2,7 +2,7 @@
 % Please edit documentation in R/backends_rest.R
 \name{hcpx_connectome_auth}
 \alias{hcpx_connectome_auth}
-\title{Store ConnectomeDB credentials in keyring}
+\title{Store ConnectomeDB credentials in keyring (legacy)}
 \usage{
 hcpx_connectome_auth(username, password)
 }
@@ -17,6 +17,13 @@ Invisible TRUE
 \description{
 Securely stores ConnectomeDB credentials for later use with the REST backend.
 }
+\section{Deprecation Notice}{
+
+ConnectomeDB availability and endpoints may change over time. If REST access
+does not work for your account/environment, consider using
+\code{backend = "balsa"} (Aspera) or another backend.
+}
+
 \examples{
 \dontrun{
 # Store credentials (only need to do once)
@@ -25,4 +32,7 @@ hcpx_connectome_auth("myusername", "mypassword")
 # Now REST backend will use these automatically
 h <- hcpx_ya(backend = "rest")
 }
+}
+\seealso{
+\code{\link[=hcpx_backend_balsa]{hcpx_backend_balsa()}}, \code{\link[=hcpx_connectome_clear]{hcpx_connectome_clear()}}
 }

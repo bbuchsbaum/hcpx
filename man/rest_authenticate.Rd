@@ -2,7 +2,7 @@
 % Please edit documentation in R/backends_rest.R
 \name{rest_authenticate}
 \alias{rest_authenticate}
-\title{Authenticate with ConnectomeDB}
+\title{Authenticate with ConnectomeDB (legacy)}
 \usage{
 rest_authenticate(backend, username = NULL, password = NULL)
 }
@@ -19,4 +19,11 @@ Updated backend with session cookie
 \description{
 Creates a session with ConnectomeDB using stored credentials.
 }
+\section{Deprecation Notice}{
+
+ConnectomeDB availability and endpoints may change over time. Consider using
+\code{\link[=hcpx_backend_balsa]{hcpx_backend_balsa()}} (Aspera) or another backend if REST authentication
+fails.
+}
+
 \keyword{internal}
