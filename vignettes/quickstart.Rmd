@@ -1,0 +1,454 @@
+---
+title: "Getting Started with hcpx"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with hcpx}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Introduction
+
+**hcpx** (HCP eXplorer) turns Human Connectome Project data into a local,
+queryable "asset catalog" with task/run awareness, plan-first downloads,
+reproducible manifests, and policy-aware metadata.
+
+The key design principles:
+
+- **Everything is queryable**: Use dplyr-style pipelines to explore and filter
+- **Plan before download**: Build a manifest, review sizes, then download
+- **Task-aware**: Understands HCP task structure (WM, MOTOR, etc.)
+- **Cache-managed**: LRU eviction, pinning, and ledger tracking
+
+## Quick Start
+
+```{r}
+library(hcpx)
+
+# Initialize with demo data (no credentials needed)
+h <- hcpx_ya()
+h
+```
+
+This creates a handle to the HCP catalog with:
+- Demo data (10 subjects, 16 assets)
+- SQLite database for queries
+- LRU cache management
+
+## The Query Chain
+
+The core workflow follows a simple pipeline:
+
+```
+subjects() |> tasks() |> assets() |> plan_download() |> download()
+```
+
+### Exploring Subjects
+
+```{r}
+# All subjects
+subjects(h)
+
+# Filter by gender
+subjects(h, gender == "F")
+
+# Filter by age range
+subjects(h, age_range == "26-30")
+
+# Multiple filters
+subjects(h, gender == "M", age_range == "26-30")
+```
+
+### Querying Tasks
+
+```{r}
+# All task runs
+tasks(h)
+
+# Filter by task name (synonyms work!)
+tasks(h, "WM")               # Working Memory
+tasks(h, "working memory")   # Same as above
+tasks(h, "MOTOR")            # Motor task
+
+# Chain from subjects
+subjects(h, gender == "F") |> tasks("WM")
+
+# Additional filters
+tasks(h, "WM", direction == "LR")
+```
+
+### Finding Assets
+
+```{r}
+# All assets
+assets(h)
+
+# Use a bundle (recommended)
+assets(h, bundle = "tfmri_cifti_min")
+
+# See available bundles
+bundles(h)
+
+# Full chain
+subjects(h, gender == "F") |>
+  tasks("WM") |>
+  assets(bundle = "tfmri_cifti_min")
+```
+
+### Getting an Overview
+
+```{r}
+# Overview of entire catalog
+overview(h)
+
+# Overview of a selection
+subjects(h, gender == "F") |> overview()
+
+# Overview of task runs
+tasks(h, "WM") |> overview()
+```
+
+## Planning Downloads
+
+Before downloading, create a plan to review what you're getting:
+```{r}
+# Create a download plan
+plan <- subjects(h, gender == "F") |>
+  tasks("WM") |>
+  assets(bundle = "tfmri_cifti_min") |>
+  plan_download(name = "wm_female_analysis")
+
+# View the plan
+plan
+```
+The plan shows:
+- Number of files and subjects
+- Total size and download size
+- Cache hit rate (files already downloaded)
+
+## Downloading Data
+
+```{r}
+# Execute the download
+results <- download(plan)
+
+# Or use materialize() alias
+results <- materialize(plan)
+```
+
+## Saving and Sharing Plans
+
+Plans can be exported as portable JSON manifests:
+
+```{r}
+# Save plan to file
+write_manifest(plan, "my_analysis_manifest.json")
+
+# Load plan later (or on another machine)
+plan <- read_manifest("my_analysis_manifest.json", h = hcpx_ya())
+```
+
+## Cache Management
+
+```{r}
+# Check cache status
+cache_status(h)
+
+# Pin important files (prevent eviction)
+cache_pin(h, c("asset_001", "asset_002"))
+
+# Unpin when done
+cache_unpin(h, c("asset_001", "asset_002"))
+
+# Prune to target size
+cache_prune(h, max_size_gb = 50)
+
+# Dry run to see what would be pruned
+cache_prune(h, max_size_gb = 50, dry_run = TRUE)
+```
+
+## Working with Real HCP Data
+
+To work with real HCP data instead of the demo set:
+
+### Option 1: Build from CSV
+
+```{r}
+# Build catalog from HCP behavioral data
+h <- hcpx_ya(catalog_version = "none")
+catalog_build(h, behavioral_csv = "unrestricted_hcp_data.csv")
+```
+
+### Option 2: Scan S3 for specific subjects
+
+```{r}
+# Build catalog by scanning S3
+h <- hcpx_ya()
+catalog_build(h,
+  subjects = c("100206", "100307", "100408"),
+  scan_s3 = TRUE)
+```
+
+### Option 3: Use a local HCP mirror
+
+```{r}
+# Use local backend if you have HCP data downloaded
+h <- hcpx_ya(
+  backend = "local",
+  local_root = "/data/HCP_1200"
+)
+```
+
+### Option 4: Download via BALSA/Aspera (newer releases)
+
+Some newer HCP releases are distributed via BALSA and may require Aspera for
+downloads. `hcpx` can use the `ascp` CLI when you provide an Aspera source spec.
+
+```{r}
+# Configure Aspera (paths are system-specific)
+Sys.setenv(HCPX_ASCP = "ascp")
+Sys.setenv(HCPX_ASPERA_KEY = "/path/to/aspera/private_key")
+
+h <- hcpx_ya(backend = "balsa")
+
+# download(plan) expects each manifest remote_path to be an Aspera source spec
+# like "user@host:/path/to/file.zip" (obtain from BALSA after login)
+```
+
+## Bundles Reference
+
+Bundles are predefined filter sets for common analysis needs:
+
+| Bundle | Description |
+|--------|-------------|
+| `tfmri_cifti_min` | Task fMRI minimal: Atlas dtseries only |
+| `tfmri_cifti_full` | Task fMRI + EVs + motion/confounds |
+| `rfmri_cifti_min` | Resting-state fMRI minimal |
+| `rfmri_cifti_full` | Resting-state + confounds/physio |
+| `struct_t1w` | Structural T1w images |
+| `struct_mni` | Structural in MNI space |
+| `evs_only` | Event timing files only |
+
+## Task Dictionary
+
+Tasks are resolved using a synonym dictionary:
+
+| Canonical | Synonyms |
+|-----------|----------|
+| WM | working memory, WORKING_MEMORY, n-back |
+| MOTOR | motor, MOT |
+| GAMBLING | gambling, GAMB, reward |
+| LANGUAGE | language, LANG, story-math |
+| SOCIAL | social, SOC, theory of mind |
+| RELATIONAL | relational, REL |
+| EMOTION | emotion, EMO, face-shape |
+
+## Loading Downloaded Data
+
+Once data is downloaded, load it into R as neuroim2 objects:
+
+### Loading Individual Assets
+
+```{r}
+# Load a single asset by ID
+vec <- load_asset(h, "asset_001")
+
+# The return type depends on the file:
+# - CIFTI dtseries → NeuroVec (4D time series)
+# - CIFTI dscalar → NeuroVec
+# - CIFTI dlabel → ClusteredNeuroVol
+# - NIfTI 3D → NeuroVol
+# - NIfTI 4D → NeuroVec
+# - TSV → data.frame (confounds)
+# - TXT → data.frame (EVs)
+```
+### Loading a Complete Run
+
+Load all components of a task run at once:
+
+```{r}
+# Load a complete run (dtseries + confounds + EVs)
+run_data <- load_run(h, "100206_WM_LR_1")
+
+# Access components
+run_data$dtseries   # NeuroVec time series
+run_data$confounds  # data.frame of motion parameters
+run_data$evs        # list of data.frames (one per condition)
+run_data$evs$body   # Event times for "body" condition
+```
+
+### Loading Multiple Runs
+
+Load data for all runs in a task selection:
+
+```{r}
+# Load runs from a tasks table
+task_tbl <- subjects(h, gender == "F") |> tasks("WM")
+runs <- load_task(task_tbl, bundle = "tfmri_cifti_full")
+
+# Returns a named list (one entry per run)
+names(runs)  # "100206_WM_LR_1", "100206_WM_RL_1", ...
+
+# Or concatenate across runs
+combined <- load_task(task_tbl, concat = TRUE)
+combined$dtseries       # Single concatenated NeuroVec
+combined$run_boundaries # c(405, 405) - TRs per run
+combined$evs            # EVs with adjusted onset times
+```
+
+## Analyzing Time Series
+
+### Extract Time Series at Coordinates
+
+```{r}
+# Extract time series from left motor cortex (MNI coordinates)
+ts <- extract_series(run_data$dtseries, c(-38, -22, 56))
+
+# Extract from multiple coordinates
+coords <- rbind(
+  c(-38, -22, 56),  # Left motor
+  c(38, -22, 56)    # Right motor
+)
+ts_matrix <- extract_series(run_data$dtseries, coords)
+# Returns: matrix (n_timepoints x n_coords)
+```
+
+### Z-score Normalization
+
+```{r}
+# Simple whole-scan normalization
+vec_z <- zscore(run_data$dtseries)
+
+# Per-run normalization for concatenated data
+vec_z <- zscore(combined$dtseries, run_boundaries = combined$run_boundaries)
+```
+
+### Create ROI Spheres
+
+```{r}
+# Create 8mm sphere at DLPFC
+dlpfc_roi <- roi_sphere(h, center = c(-46, 10, 30), radius_mm = 8)
+
+# Extract mean time series from ROI
+roi_ts <- neuroim2::series_roi(run_data$dtseries, dlpfc_roi, mean)
+```
+
+### Concatenate Runs
+
+```{r}
+# Manual concatenation of runs
+run1 <- load_run(h, "100206_WM_LR_1")$dtseries
+run2 <- load_run(h, "100206_WM_RL_1")$dtseries
+combined <- concat_vecs(run1, run2)
+```
+
+## Parcellation
+
+Apply atlas-based parcellation to reduce dimensionality:
+
+```{r}
+# List available parcellations
+list_parcellations()
+
+# Load a parcellation atlas
+atlas <- load_parcellation("schaefer400_7networks")
+
+# Parcellate time series data
+parcel_ts <- parcellate(run_data$dtseries, atlas)
+# Returns: matrix (n_timepoints x n_parcels)
+
+# Compute functional connectivity
+fc <- cor(parcel_ts)
+```
+
+## Derived Products
+
+Create and cache derived products (e.g., parcellated time series):
+
+### Register a Custom Recipe
+
+```{r}
+# Define a parcellation recipe
+register_recipe(
+  name = "parcellate_schaefer400",
+  description = "Parcellate CIFTI with Schaefer 400 atlas",
+  input = "assets",  # Operates on individual assets
+  compute = function(paths, ...) {
+    vec <- neuroim2::read_vec(paths[1])
+    atlas <- load_parcellation("schaefer400_7networks")
+    parcellate(vec, atlas)
+  }
+)
+```
+
+### Create and Execute Derivations
+
+```{r}
+# Create a derivation plan
+deriv <- subjects(h, gender == "F") |>
+  tasks("WM") |>
+  assets(bundle = "tfmri_cifti_min") |>
+  derive("parcellate_schaefer400")
+
+# Execute the derivation
+results <- materialize(deriv)
+
+# Query derived products
+derived(h, recipe = "parcellate_schaefer400")
+```
+
+## Authentication
+
+### AWS (S3 Open-Access Bucket)
+
+```{r}
+# Use an AWS profile
+hcpx_auth(h, aws_profile = "hcp")
+
+# Or store credentials in keyring
+hcpx_keyring_set("my_access_key", "my_secret_key")
+hcpx_auth(h)
+
+# Check auth status
+hcpx_auth_status(h)
+```
+
+### ConnectomeDB (REST Backend)
+
+```{r}
+# Store ConnectomeDB credentials
+hcpx_connectome_auth("username", "password")
+
+# Use REST backend
+h <- hcpx_ya(backend = "rest")
+```
+
+## Best Practices
+
+### Data Acquisition
+1. **Start small**: Test with demo data before working with real HCP data
+2. **Use bundles**: They encapsulate best practices for file selection
+3. **Plan first**: Always review a plan before downloading gigabytes of data
+4. **Pin important files**: Prevent accidental eviction of files you need
+5. **Export manifests**: Share reproducible file lists with collaborators
+
+### Data Analysis
+6. **Use `load_run()` for complete runs**: Gets dtseries, confounds, and EVs together
+7. **Concatenate with care**: Use `run_boundaries` for per-run normalization
+8. **Cache derived products**: Use `derive()` to avoid recomputing parcellations
+9. **Prefer parcellation**: Reduces data size and noise for connectivity analyses
+10. **Check coordinates**: MNI coordinates are automatically converted to voxel space
+
+## Next Steps
+
+- Explore the [neuroim2 documentation](https://bbuchsbaum.github.io/neuroim2/) for advanced neuroimaging operations
+- Check `recipes()` to see built-in derivation recipes
+- Use `overview()` frequently to understand your data selections

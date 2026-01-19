@@ -1,0 +1,86 @@
+# Task dictionary: canonical names, synonyms, completion flags, and expected runs
+# This file defines the 7 canonical HCP task names
+
+WM:
+  description: "Working Memory task (2-back)"
+  synonyms:
+    - "WORKING_MEMORY"
+    - "working memory"
+    - "tfMRI_WM"
+    - "wm"
+  completion_flag: "fMRI_WM_Compl"
+  expected_runs: 2
+  directions:
+    - "LR"
+    - "RL"
+
+MOTOR:
+  description: "Motor task"
+  synonyms:
+    - "motor"
+    - "tfMRI_MOTOR"
+  completion_flag: "fMRI_Mot_Compl"
+  expected_runs: 2
+  directions:
+    - "LR"
+    - "RL"
+
+GAMBLING:
+  description: "Gambling task"
+  synonyms:
+    - "gambling"
+    - "tfMRI_GAMBLING"
+    - "GAMB"
+  completion_flag: "fMRI_Gamb_Compl"
+  expected_runs: 2
+  directions:
+    - "LR"
+    - "RL"
+
+LANGUAGE:
+  description: "Language task (story/math)"
+  synonyms:
+    - "language"
+    - "tfMRI_LANGUAGE"
+    - "LANG"
+  completion_flag: "fMRI_Lang_Compl"
+  expected_runs: 2
+  directions:
+    - "LR"
+    - "RL"
+
+SOCIAL:
+  description: "Social cognition task (theory of mind)"
+  synonyms:
+    - "social"
+    - "tfMRI_SOCIAL"
+    - "SOC"
+  completion_flag: "fMRI_Soc_Compl"
+  expected_runs: 2
+  directions:
+    - "LR"
+    - "RL"
+
+RELATIONAL:
+  description: "Relational processing task"
+  synonyms:
+    - "relational"
+    - "tfMRI_RELATIONAL"
+    - "REL"
+  completion_flag: "fMRI_Rel_Compl"
+  expected_runs: 2
+  directions:
+    - "LR"
+    - "RL"
+
+EMOTION:
+  description: "Emotion processing task"
+  synonyms:
+    - "emotion"
+    - "tfMRI_EMOTION"
+    - "EMOT"
+  completion_flag: "fMRI_Emo_Compl"
+  expected_runs: 2
+  directions:
+    - "LR"
+    - "RL"

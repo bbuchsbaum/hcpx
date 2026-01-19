@@ -1,0 +1,77 @@
+# Bundle definitions: named profiles for common analysis needs
+# Each bundle defines filter criteria for the assets table
+
+tfmri_cifti_min:
+  description: "Task fMRI minimal CIFTI: Atlas dtseries only"
+  where:
+    kind: "tfmri"
+    space: "MNINonLinear"
+    file_type:
+      - "dtseries"
+
+tfmri_cifti_full:
+  description: "Task fMRI CIFTI + EVs + motion/confounds"
+  where:
+    kind: "tfmri"
+    space: "MNINonLinear"
+    file_type:
+      - "dtseries"
+      - "ev"
+      - "confounds"
+      - "qc"
+
+rfmri_cifti_min:
+  description: "Resting-state fMRI minimal CIFTI: Atlas dtseries only"
+  where:
+    kind: "rfmri"
+    space: "MNINonLinear"
+    file_type:
+      - "dtseries"
+
+rfmri_cifti_full:
+  description: "Resting-state fMRI CIFTI + confounds/physio"
+  where:
+    kind: "rfmri"
+    space: "MNINonLinear"
+    file_type:
+      - "dtseries"
+      - "confounds"
+      - "physio"
+
+evs_only:
+  description: "Event timing files only (for task fMRI)"
+  where:
+    kind: "tfmri"
+    file_type:
+      - "ev"
+
+qc_min:
+  description: "Quality control files only"
+  where:
+    file_type:
+      - "qc"
+
+struct_t1w:
+  description: "Structural T1w images"
+  where:
+    kind: "struct"
+    file_type:
+      - "nii.gz"
+    space: "T1w"
+
+struct_mni:
+  description: "Structural images in MNI space"
+  where:
+    kind: "struct"
+    space: "MNINonLinear"
+    file_type:
+      - "nii.gz"
+
+diffusion_min:
+  description: "Diffusion data minimal"
+  where:
+    kind: "diff"
+    file_type:
+      - "nii.gz"
+      - "bval"
+      - "bvec"

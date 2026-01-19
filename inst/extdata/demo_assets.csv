@@ -1,0 +1,17 @@
+asset_id,release,subject_id,session,kind,task,run,direction,space,derivative_level,file_type,remote_path,size_bytes
+a001,HCP_1200,100206,3T,tfmri,WM,1,LR,MNINonLinear,preprocessed,dtseries,HCP_1200/100206/MNINonLinear/Results/tfMRI_WM_LR/tfMRI_WM_LR_Atlas.dtseries.nii,524288000
+a002,HCP_1200,100206,3T,tfmri,WM,1,RL,MNINonLinear,preprocessed,dtseries,HCP_1200/100206/MNINonLinear/Results/tfMRI_WM_RL/tfMRI_WM_RL_Atlas.dtseries.nii,524288000
+a003,HCP_1200,100206,3T,tfmri,MOTOR,1,LR,MNINonLinear,preprocessed,dtseries,HCP_1200/100206/MNINonLinear/Results/tfMRI_MOTOR_LR/tfMRI_MOTOR_LR_Atlas.dtseries.nii,419430400
+a004,HCP_1200,100206,3T,tfmri,MOTOR,1,RL,MNINonLinear,preprocessed,dtseries,HCP_1200/100206/MNINonLinear/Results/tfMRI_MOTOR_RL/tfMRI_MOTOR_RL_Atlas.dtseries.nii,419430400
+a005,HCP_1200,100307,3T,tfmri,WM,1,LR,MNINonLinear,preprocessed,dtseries,HCP_1200/100307/MNINonLinear/Results/tfMRI_WM_LR/tfMRI_WM_LR_Atlas.dtseries.nii,524288000
+a006,HCP_1200,100307,3T,tfmri,WM,1,RL,MNINonLinear,preprocessed,dtseries,HCP_1200/100307/MNINonLinear/Results/tfMRI_WM_RL/tfMRI_WM_RL_Atlas.dtseries.nii,524288000
+a007,HCP_1200,100307,3T,tfmri,GAMBLING,1,LR,MNINonLinear,preprocessed,dtseries,HCP_1200/100307/MNINonLinear/Results/tfMRI_GAMBLING_LR/tfMRI_GAMBLING_LR_Atlas.dtseries.nii,314572800
+a008,HCP_1200,100307,3T,tfmri,GAMBLING,1,RL,MNINonLinear,preprocessed,dtseries,HCP_1200/100307/MNINonLinear/Results/tfMRI_GAMBLING_RL/tfMRI_GAMBLING_RL_Atlas.dtseries.nii,314572800
+a009,HCP_1200,100206,3T,tfmri,WM,1,LR,MNINonLinear,preprocessed,ev,HCP_1200/100206/MNINonLinear/Results/tfMRI_WM_LR/EVs/0bk_body.txt,1024
+a010,HCP_1200,100206,3T,tfmri,WM,1,LR,MNINonLinear,preprocessed,ev,HCP_1200/100206/MNINonLinear/Results/tfMRI_WM_LR/EVs/0bk_faces.txt,1024
+a011,HCP_1200,100206,3T,rfmri,NA,1,LR,MNINonLinear,preprocessed,dtseries,HCP_1200/100206/MNINonLinear/Results/rfMRI_REST1_LR/rfMRI_REST1_LR_Atlas.dtseries.nii,1073741824
+a012,HCP_1200,100206,3T,rfmri,NA,1,RL,MNINonLinear,preprocessed,dtseries,HCP_1200/100206/MNINonLinear/Results/rfMRI_REST1_RL/rfMRI_REST1_RL_Atlas.dtseries.nii,1073741824
+a013,HCP_1200,100408,3T,tfmri,WM,1,LR,MNINonLinear,preprocessed,dtseries,HCP_1200/100408/MNINonLinear/Results/tfMRI_WM_LR/tfMRI_WM_LR_Atlas.dtseries.nii,524288000
+a014,HCP_1200,100408,3T,tfmri,WM,1,RL,MNINonLinear,preprocessed,dtseries,HCP_1200/100408/MNINonLinear/Results/tfMRI_WM_RL/tfMRI_WM_RL_Atlas.dtseries.nii,524288000
+a015,HCP_1200,100610,3T,tfmri,LANGUAGE,1,LR,MNINonLinear,preprocessed,dtseries,HCP_1200/100610/MNINonLinear/Results/tfMRI_LANGUAGE_LR/tfMRI_LANGUAGE_LR_Atlas.dtseries.nii,367001600
+a016,HCP_1200,100610,3T,tfmri,LANGUAGE,1,RL,MNINonLinear,preprocessed,dtseries,HCP_1200/100610/MNINonLinear/Results/tfMRI_LANGUAGE_RL/tfMRI_LANGUAGE_RL_Atlas.dtseries.nii,367001600
